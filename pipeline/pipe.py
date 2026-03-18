@@ -26,7 +26,13 @@ def _clock_cycles(num_batches: int, num_partitions: int) -> Iterable[List[Tuple[
     This function should yield schedules for each clock cycle.
     '''
     # BEGIN_HW5_2_1
-    raise NotImplementedError("Schedule Generation Not Implemented Yet")
+    for k in range(num_batches + num_partitions - 1):
+        schedule = []
+        for j in range(num_partitions):
+            i = k - j
+            if i >= 0 and i < num_batches:
+                schedule.append((i, j))
+        yield schedule
     # END_HW5_2_1
 
 class Pipe(nn.Module):
@@ -53,7 +59,13 @@ class Pipe(nn.Module):
         Please note that you should put the result on the last device. Putting the result on the same device as input x will lead to pipeline parallel training failing.
         '''
         # BEGIN_HW5_2_2
-        raise NotImplementedError("Pipeline Parallel Not Implemented Yet")
+        num_batches = (x.shape[0] + self.split_size - 1) // self.split_size
+        micro_batches = list(torch.split(x, self.split_size, dim=0))
+
+        for schedule in _clock_cycles(num_batches, len(self.partitions)):
+            self.compute(micro_batches, schedule)
+
+        return torch.cat(micro_batches, dim=0).to(self.devices[-1])
         # END_HW5_2_2
 
     def compute(self, batches, schedule: List[Tuple[int, int]]) -> None:
@@ -69,6 +81,19 @@ class Pipe(nn.Module):
         devices = self.devices
 
         # BEGIN_HW5_2_2
-        raise NotImplementedError("Pipeline Parallel Not Implemented Yet")
+        for i, j in schedule:
+            batch = batches[i]
+            partition = partitions[j]
+            device = devices[j]
+
+            def compute_fn(batch=batch, partition=partition, device=device):
+                return partition(batch.to(device))
+
+            task = Task(compute_fn)
+            self.in_queues[j].put(task)
+
+        for i, j in schedule:
+            task, result = self.out_queues[j].get()
+            batches[i] = result[1]
         # END_HW5_2_2
 

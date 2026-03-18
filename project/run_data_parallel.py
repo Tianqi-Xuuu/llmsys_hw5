@@ -32,7 +32,11 @@ def average_gradients(model):
     3. Average the gradients over the world_size (total number of devices)
     '''
     # BEGIN_HW5_1_2
-    raise NotImplementedError("Data Parallel Not Implemented Yet")
+    world_size = dist.get_world_size()
+    for param in model.parameters():
+        if param.grad is not None:
+            dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
+            param.grad.data /= world_size
     # END_HW5_1_2
 
 def setup(rank, world_size, backend):
@@ -42,7 +46,9 @@ def setup(rank, world_size, backend):
     2. Use `torch.distributed` to init the process group
     '''
     # BEGIN_HW5_1_2
-    raise NotImplementedError("Data Parallel Not Implemented Yet")
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '11868'
+    dist.init_process_group(backend, rank=rank, world_size=world_size)
     # END_HW5_1_2
 
 
@@ -55,8 +61,9 @@ def run_dp(
     learning_rate=1e-4,
     benchmark_only=False,
     max_batches=0,
-    pytest_mode=False):
-    workdir = f'./workdir'
+    pytest_mode=False,
+    workdir='./workdir'):
+    
     os.makedirs(workdir, exist_ok=True)
 
     config = AutoConfig.from_pretrained('gpt2')
@@ -197,8 +204,21 @@ if __name__ == '__main__':
     2. You should start the processes to work and terminate resources properly
     '''
     # BEGIN_HW5_1_3
-    world_size = None  # TODO: Define the number of GPUs
-    backend = None  # TODO: Define your backend for communication, we suggest using 'nccl'
+    for rank in range(args.world_size):
+        p = Process(target=run_dp, args=(rank, 
+                                         args.world_size, 
+                                         'nccl', 
+                                         args.dataset, 
+                                         args.model_max_length, 
+                                         args.n_epochs, 
+                                         args.batch_size, 
+                                         args.learning_rate, 
+                                         args.benchmark_only, 
+                                         args.max_batches, 
+                                         PYTEST))
+        p.start()
+        processes.append(p)
 
-    raise NotImplementedError("Data Parallel Not Implemented Yet")
+    for p in processes:
+        p.join()
     # END_HW5_1_3
