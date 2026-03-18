@@ -2,3 +2,12 @@ __pycache__
 slurm*
 workdir
 tests/model*.pth
+*.py[cod]
+.pytest_cache/
+.venv/
+.vscode/
+dist/
+submit_figures/
+*.log
+*_vs_*_time.png
+*_vs_*_tokens.png
